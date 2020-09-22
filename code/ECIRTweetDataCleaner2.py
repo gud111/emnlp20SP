@@ -7,36 +7,34 @@ Created on Wed May  6 15:07:18 2020
 """
 
 from operator import itemgetter
-#import os
+import os
 import regex as re
 import numpy as np
 #import emot
-#import string
+import string
 import twNormalizer as tn
-#URLPAT="https://t.co/[0-9|a-z|A-Z]*"
 
-##http://www.panacealab.org/covid19/
-##COVD19, CoronavirusPandemic, COVID-19, 2019nCoV, CoronaOutbreak,coronavirus , 
-##WuhanVirus, covid19, coronaviruspandemic, covid-19, 2019ncov, coronaoutbreak, wuhanvirus. 
+punctable = str.maketrans('', '', string.punctuation)
 
-ignoreht={}
-ignoreht["covd19"]=""
-ignoreht["coronaviruspandemic"]=""
-ignoreht["covid-19"]=""
-ignoreht["2019ncov"]=""
-ignoreht["coronaoutbreak"]=""
-ignoreht["coronavirus"]=""
-ignoreht["wuhanvirus"]=""
-ignoreht["covid19"]=""
-ignoreht["ncov"]=""
-ignoreht["covid"]=""
-ignoreht["virus"]=""
-ignoreht["sarscov2"]=""
-
-
+def loadDictionary(inpfile):
+    
+    fin = open (inpfile, "r")
+    lines = fin.readlines()
+    fin.close()
+    
+    thisdict={}
+    for lx, line in enumerate(lines):
+        parts = line.strip().split()
+        term = line.replace(parts[len(parts)-1],"").strip()
+        thisdict[term] = lx
+ 
+    print ("Loaded dictionary of length "+str(len(thisdict)))
+    return thisdict
+    
 
     
-def processPanaceaData(idtsfile, conttsvfile, outdir):
+def processPanaceaData(idtsfile, conttsvfiles, outdir, \
+                       emojidict, termdict, htagdict):
     
     
     idcol=0
@@ -72,100 +70,111 @@ def processPanaceaData(idtsfile, conttsvfile, outdir):
     
     
     lx=0
-    bydatecounts={}
-    htdict={}
-    termdict={}
-    emojidict={}
+  
+    tfout = open(outdir+"/textcontent.mallet.in", "w")
+    emfout = open(outdir+"/emojicontent.mallet.in", "w")
+   
+    for conttsvfile in conttsvfiles:
     
-    id2text={}
-    id2htags={}
-    id2emoji={}
-    
-    fin = open (conttsvfile, "r")
+        fin = open (conttsvfile, "r")
+            
+      #  header = fin.readline() #not doing anything
         
-  #  header = fin.readline() #not doing anything
-    
-    
-    line = fin.readline()
-    
-    
-    while line:
         
-        parts = line.split("\t")    
-        twid = parts[idcol].strip()
-        tweet = parts[cleantextcol]
-        htags = parts[htcol].split(htseparator)
-        emojis = parts[emojicol].split(emojiseparator)
-        
-        if twid in timeinfo:
-            
-            for emoji in emojis:
-                emlist = tn.parseEmojis(emoji)
-                for em in emlist:
-                    if em not in emojidict:
-                        emojidict[em]=1
-                    else:
-                        emojidict[em]+=1
-            
-            for htag in htags:
-                htag = htag.lower()
-                if htag not in htdict and htag not in ignoreht:
-                    htdict[htag]=1
-                elif htag in htdict:
-                    htdict[htag] += 1
-                
-            newsent=""
-            words = tweet.strip().split()
-            for word in words:
-                if word.startswith("@"):
-                    continue
-                
-                found=False
-                for htag in htags:
-                    if "#"+htag in word.lower():
-                        found=True
-                        break
-                
-                if not found:
-                    newsent +=" "+word
-    
-            newsent = newsent.strip()
-            
-            
-            if len(newsent)>0:
-                
-                datei=timeinfo[twid]
-                
-                if datei in bydatecounts:
-                    bydatecounts[datei]+=1
-                else:
-                    bydatecounts[datei]=1
-                
-                
-                words = re.sub("[^\P{P}-]+", " ", newsent).lower().strip().split()
-                
-                for word in words:
-                    if word.strip()!="":
-                        
-                        if word not in termdict and word not in ignoreht:
-                            termdict[word]=1
-                        elif word in termdict:
-                            termdict[word] += 1
-               
-                id2text[twid]=newsent
-                id2htags[twid]=htags
-                id2emoji[twid]=emojis
-                
-                
-                
-        lx += 1 
         line = fin.readline()
         
         
-    fin.close()
+        while line:
             
+            parts = line.split("\t")    
+            twid = parts[idcol].strip()
+            tweet = parts[cleantextcol]
+            htags = parts[htcol].split(htseparator)
+            emojis = parts[emojicol].split(emojiseparator)
+            
+            if twid in timeinfo:
+                
+                emtext=""
+                httext=""
+                for emoji in emojis:
+                    emlist = tn.parseEmojis(emoji)
+                    for em in emlist:
+                        if em in emojidict:
+                            emtext+=" "+emojiseparator+"-"+str(emojidict[em])
+                
+                for htag in htags:
+                    htag = htag.lower().translate(punctable)
+                    if htag in htagdict:
+                        httext+=" "+htseparator+"-"+htag #str(htagdict[htag])
+                    
+                newsent=""
+                words = tweet.strip().split()
+                for word in words:
+                    if word.startswith("@") or word.startswith("#"):
+                        continue
+                    
+                    newsent +=" "+word
+                    
+        
+                
+                newsent = newsent.translate(punctable).lower()
+                words = re.sub("[^\P{P}-]+", " ", newsent).strip().split()
+                newtext=""
+                if len(newsent)>0:
+                    
+                    for word in words:
+                        if word in termdict:
+                            newtext +=" "+word
+                   
+                
+                emtext = emtext.strip()
+                httext = httext.strip()
+                newtext = newtext.strip()
+                
+                if emtext=="":
+                    emtext = emojiseparator+"-NONE"
+                if httext=="":
+                    httext = htseparator+"-NONE"
+                
+                if len(newtext)>0:
+                    tfout.write(twid+"\t"+timeinfo[twid]+"\t"+newtext+" "+httext+"\n")
+                    emfout.write(twid+"\t"+timeinfo[twid]+"\t"+emtext+"\n")
+                
+                    
+            lx += 1 
+            line = fin.readline()
+            if lx%1000==0:
+                print ("lx="+str(lx))
+                tfout.flush()
+                emfout.flush()
+            
+        fin.close()
+        print ("lx="+str(lx))
+       
     
-    print ("lx="+str(lx))
-    for datei in bydatecounts:
-        print (datei+" "+str(bydatecounts[datei]))
+    tfout.close()
+    emfout.close()
+    
+    
+    
+inpdir = "/home/sdas/cord/ecir/tsv"
+idtsfile="/home/sdas/cord/ecir/newsample.tsv"
+dictdir="/home/sdas/cord/ecir/dicts"
+outdir="/home/sdas/cord/ecir/data"
+
+flist =   os.listdir(inpdir)
+toprocess=[]
+
+for fname in flist:
+    if fname.startswith("content_") and fname.endswith(".tsv"):
+        toprocess.append(inpdir+"/"+fname)
+        
+        
+emojidict = loadDictionary(dictdir+"/emdict.txt")
+termdict = loadDictionary(dictdir+"/termdict.txt")
+htagdict = loadDictionary(dictdir+"/htagsdict.txt")
+processPanaceaData(idtsfile, toprocess, outdir, emojidict, termdict, htagdict)
+
+    
+    
     

@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 import json
 import sys
-import string
+
 import re
 # This will load the fields list
 import fields
@@ -106,7 +106,7 @@ def process(data, preprocess, partnum, outfile):
         tweet_df['text'] = tweet_df['text'].apply(lambda x : remove_emoji(x))
         tweet_df['text'] = tweet_df['text'].apply(lambda x : give_emoji_free_text(x))
         tweet_df['entities.hashtags'] = tweet_df['entities.hashtags'].apply(lambda x : give_ht_content(x))
-        print(tweet_df['entities.hashtags'])
+        #print(tweet_df['entities.hashtags'])
     
 
     
@@ -131,3 +131,6 @@ with open(fileN, 'r') as f:
             process(data, preprocess, part, outfile)
             data.clear()
             part += 1
+            
+if len(data)>0:
+    process(data, preprocess, part, outfile)
