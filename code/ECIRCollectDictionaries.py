@@ -10,7 +10,7 @@ from operator import itemgetter
 import os
 import regex as re
 import numpy as np
-#import emot
+import emot
 import string
 import twNormalizer as tn
 from nltk.corpus import stopwords  
@@ -35,10 +35,12 @@ ignoreht["ncov"]=""
 ignoreht["covid"]=""
 ignoreht["virus"]=""
 ignoreht["sarscov2"]=""
+ignoreht["amp"]=""
+
 
 tfthresh=20
 htfthresh=5
-emthresh=5
+emthresh=3
 punctable = str.maketrans('', '', string.punctuation)
     
 def processPanaceaData(idtsfile, conttsvfiles, outdir):
@@ -47,8 +49,7 @@ def processPanaceaData(idtsfile, conttsvfiles, outdir):
     idcol=0
     cleantextcol=1
     htcol = 6
-    emojicol = 7
-    emojiseparator="GSDASEM"
+ 
     htseparator="GSDASHT"
     
     timeinfo={}
@@ -99,22 +100,43 @@ def processPanaceaData(idtsfile, conttsvfiles, outdir):
             twid = parts[idcol].strip()
             tweet = parts[cleantextcol]
             htags = parts[htcol].split(htseparator)
-            emojis = parts[emojicol].split(emojiseparator)
+            
             
             if twid in timeinfo:
                 
+                emojis = tn.parseEmojis(tweet)
+                temp = emot.emoticons(tweet) #tn.removeHTAtEmoji(tweet))
+                emoticons=[]
+                if 'value' in temp:
+                    emoticons = temp['value']
+        
                 for emoji in emojis:
-                    emlist = tn.parseEmojis(emoji)
-                    for em in emlist:
-                        if em not in emojidict:
-                            emojidict[em]=1
-                        else:
-                            emojidict[em]+=1
+                    if emoji not in emojidict:
+                        emojidict[emoji]=1
+                    else:
+                        emojidict[emoji]+=1
+                
+                for emoticon in emoticons:
+                    if emoticon not in emojidict:
+                        emojidict[emoticon]=1
+                    else:
+                        emojidict[emoticon]+=1
+        
+                
                 
                 for htag in htags:
-                    htag = htag.lower().translate(punctable)
+                    htag = htag.lower().translate(punctable).strip()
                     if htag=="":
                         continue
+                    
+#                    ismatch=False
+#                    for ht in ignoreht:
+#                        if ht in htag:
+#                            ismatch=True
+#                            break
+#                    
+#                    if ismatch:
+#                        continue
                     
                     if htag not in htdict and htag not in ignoreht:
                         htdict[htag]=1
@@ -124,17 +146,10 @@ def processPanaceaData(idtsfile, conttsvfiles, outdir):
                 newsent=""
                 words = tweet.strip().split()
                 for word in words:
-                    if word.startswith("@"):
+                    if word.startswith("@") or word.startswith("#"):
                         continue
                     
-                    found=False
-                    for htag in htags:
-                        if "#"+htag in word.lower():
-                            found=True
-                            break
-                    
-                    if not found:
-                        newsent +=" "+word
+                    newsent +=" "+word
         
                 
                 newsent = newsent.translate(punctable).lower()

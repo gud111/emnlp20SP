@@ -10,11 +10,14 @@ from operator import itemgetter
 import os
 import regex as re
 import numpy as np
-#import emot
+import emot
 import string
 import twNormalizer as tn
 
 punctable = str.maketrans('', '', string.punctuation)
+emojiseparator="GSDASEM"
+htseparator="GSDASHT"
+noneindicator="NONE"
 
 def loadDictionary(inpfile):
     
@@ -40,9 +43,6 @@ def processPanaceaData(idtsfile, conttsvfiles, outdir, \
     idcol=0
     cleantextcol=1
     htcol = 6
-    emojicol = 7
-    emojiseparator="GSDASEM"
-    htseparator="GSDASHT"
     
     timeinfo={}
     
@@ -90,17 +90,28 @@ def processPanaceaData(idtsfile, conttsvfiles, outdir, \
             twid = parts[idcol].strip()
             tweet = parts[cleantextcol]
             htags = parts[htcol].split(htseparator)
-            emojis = parts[emojicol].split(emojiseparator)
+            
             
             if twid in timeinfo:
                 
                 emtext=""
                 httext=""
+                emojis = tn.parseEmojis(tweet)
+                temp = emot.emoticons(tweet) #tn.removeHTAtEmoji(tweet))
+                emoticons=[]
+                if 'value' in temp:
+                    emoticons = temp['value']
+        
                 for emoji in emojis:
-                    emlist = tn.parseEmojis(emoji)
-                    for em in emlist:
-                        if em in emojidict:
-                            emtext+=" "+emojiseparator+"-"+str(emojidict[em])
+                    if emoji in emojidict:
+                        emtext+=" "+emojiseparator+"-"+str(emojidict[emoji])
+                    
+                
+                for emoticon in emoticons:
+                    if emoticon in emojidict:
+                        emtext+=" "+emojiseparator+"-"+str(emojidict[emoticon])
+                    
+                            
                 
                 for htag in htags:
                     htag = htag.lower().translate(punctable)
@@ -132,9 +143,9 @@ def processPanaceaData(idtsfile, conttsvfiles, outdir, \
                 newtext = newtext.strip()
                 
                 if emtext=="":
-                    emtext = emojiseparator+"-NONE"
+                    emtext = emojiseparator+"-"+noneindicator
                 if httext=="":
-                    httext = htseparator+"-NONE"
+                    httext = htseparator+"-"+noneindicator
                 
                 if len(newtext)>0:
                     tfout.write(twid+"\t"+timeinfo[twid]+"\t"+newtext+" "+httext+"\n")
@@ -171,6 +182,15 @@ for fname in flist:
         
         
 emojidict = loadDictionary(dictdir+"/emdict.txt")
+
+fout = open (outdir+"/emodict4lda.dat", "w")
+
+for emoji in emojidict:
+    fout.write(emojiseparator+"-"+str(emojidict[emoji])+" "+emoji+"\n")
+    
+fout.write(emojiseparator+"-"+noneindicator+" "+str(len(emojidict))+"\n")
+fout.close()
+
 termdict = loadDictionary(dictdir+"/termdict.txt")
 htagdict = loadDictionary(dictdir+"/htagsdict.txt")
 processPanaceaData(idtsfile, toprocess, outdir, emojidict, termdict, htagdict)
